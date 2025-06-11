@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup, Tag
 from datetime import datetime
 
 def extract_metadata(java_file_path):
+    """Java 파일에서 메타데이터 추출"""
     with open(java_file_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
 
@@ -24,9 +25,11 @@ def extract_metadata(java_file_path):
     return title, platform, url
 
 def slugify(text):
+    """텍스트를 파일명으로 사용 가능한 형태로 변환"""
     return text.strip().replace(" ", "_").replace(":", "").replace("/", "_")
 
 def extract_programmers_markdown(soup):
+    """프로그래머스 페이지에서 마크다운 추출"""
     content = {
         "문제 설명": "",
         "제한사항": "",
@@ -73,6 +76,7 @@ def extract_programmers_markdown(soup):
     return content
 
 def fetch_baekjoon_content(url):
+    """백준 페이지에서 문제 내용 추출 - HTML 구조 기반 파싱"""
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -83,87 +87,129 @@ def fetch_baekjoon_content(url):
         raise Exception(f"❌ 백준 URL 접속 실패: {url}\n{str(e)}")
 
     soup = BeautifulSoup(response.text, 'html.parser')
-
-    # 페이지 전체 텍스트 추출
-    page_text = soup.get_text()
-    lines = [line.strip() for line in page_text.split('\n') if line.strip()]
-
+    
+    # 초기화
     문제 = ""
     입력 = ""
     출력 = ""
-    예제입력 = ""
-    예제출력 = ""
+    예제입력 = []
+    예제출력 = []
     
-    # 정답 비율 이후부터 문제 설명 시작
-    문제_start = -1
-    문제_end = -1
-
-    for i, line in enumerate(lines):
-        # 정답 비율이 포함된 라인 찾기 (예: "83.805%")
-        if re.search(r'\d+\.\d+%', line):
-            문제_start = i + 1
-        # "첫 번째 줄에"가 나오면 문제 설명 끝
-        elif '첫 번째 줄에' in line and 문제_start != -1:
-            문제_end = i
-            break
-    # 문제 설명 추출
-    if 문제_start != -1 and 문제_end != -1:
-        문제_lines = lines[문제_start:문제_end]
-        문제 = ' '.join(문제_lines).strip()
-
-    # 입력 설명 추출 ("첫 번째 줄에"부터 시작)
-    입력_lines = []
-    입력_found = False
+    # 1. 문제 영역 찾기 (id="problem_description")
+    problem_section = soup.find('div', {'id': 'problem_description'})
+    if problem_section:
+        # 모든 p 태그의 텍스트를 합치기
+        문제_paragraphs = problem_section.find_all('p')
+        문제 = '\n'.join([p.get_text(strip=True) for p in 문제_paragraphs])
+        print(f"✓ 문제 설명 찾음: {len(문제)}자")
     
-    for i, line in enumerate(lines):
-        if '첫 번째 줄에' in line:
-            입력_found = True
-            입력_lines.append(line)
-        elif 입력_found and ('출력한다' in line or '출력하시오' in line):
-            # 출력 설명까지 포함하지 않고 입력만
-            break
-        elif 입력_found and '번째 줄에' in line:
-            입력_lines.append(line)
+    # 2. 입력 영역 찾기 (id="problem_input")
+    input_section = soup.find('div', {'id': 'problem_input'})
+    if input_section:
+        입력_paragraphs = input_section.find_all('p')
+        입력 = '\n'.join([p.get_text(strip=True) for p in 입력_paragraphs])
+        print(f"✓ 입력 설명 찾음: {len(입력)}자")
     
-    입력 = ' '.join(입력_lines).strip()
+    # 3. 출력 영역 찾기 (id="problem_output")
+    output_section = soup.find('div', {'id': 'problem_output'})
+    if output_section:
+        출력_paragraphs = output_section.find_all('p')
+        출력 = '\n'.join([p.get_text(strip=True) for p in 출력_paragraphs])
+        print(f"✓ 출력 설명 찾음: {len(출력)}자")
     
-    # 출력 설명 추출
-    for line in lines:
-        if ('출력한다' in line or '출력하시오' in line) and ('경우의 수' in line or '출력' in line):
-            출력 = line.strip()
-            break
+    # 4. 예제 입출력 찾기
+    # 예제 입력 찾기 (class="sampledata")
+    sample_inputs = soup.find_all('pre', {'class': 'sampledata', 'id': lambda x: x and x.startswith('sample-input-')})
+    for sample in sample_inputs:
+        text = sample.get_text(strip=True)
+        if text:
+            예제입력.append(text)
+            print(f"✓ 예제 입력 찾음: {text}")
     
-    # 예제 입출력 추출 (숫자로만 구성된 라인들)
-    number_lines = []
-    number_pattern = re.compile(r'^\d+(\s+\d+)*$')
+    # 예제 출력 찾기
+    sample_outputs = soup.find_all('pre', {'class': 'sampledata', 'id': lambda x: x and x.startswith('sample-output-')})
+    for sample in sample_outputs:
+        text = sample.get_text(strip=True)
+        if text:
+            예제출력.append(text)
+            print(f"✓ 예제 출력 찾음: {text}")
     
-    for line in lines:
-        # 숫자와 공백만으로 구성된 라인 찾기
-        if number_pattern.match(line):
-            number_lines.append(line)
+    # 만약 위 방법으로 못 찾았으면 다른 방법 시도
+    if not 예제입력 or not 예제출력:
+        # 모든 pre 태그 확인
+        all_pre = soup.find_all('pre')
+        for i, pre in enumerate(all_pre):
+            text = pre.get_text(strip=True)
+            # copy 버튼이 있는 pre 태그는 예제일 가능성이 높음
+            if pre.find_next_sibling('button') or pre.find_previous_sibling('button'):
+                if '복사' in str(pre.find_next_sibling()) or '복사' in str(pre.find_previous_sibling()):
+                    if i % 2 == 0:  # 짝수 인덱스는 입력
+                        예제입력.append(text)
+                    else:  # 홀수 인덱스는 출력
+                        예제출력.append(text)
     
-    # 첫 번째와 두 번째를 예제 입력과 출력으로 설정
-    if len(number_lines) >= 2:
-        예제입력 = number_lines[0]
-        예제출력 = number_lines[1]
+    # 텍스트 기반 백업 방법
+    if not 문제 or not 입력 or not 출력:
+        print("⚠️ HTML 구조로 못 찾아서 텍스트 기반 파싱 시도")
+        
+        # 전체 텍스트 가져오기
+        full_text = soup.get_text()
+        
+        # 문제, 입력, 출력 섹션 찾기
+        sections = re.split(r'\n(문제|입력|출력|예제 입력|예제 출력)', full_text)
+        
+        current_section = None
+        for i, section in enumerate(sections):
+            section = section.strip()
+            if section == '문제':
+                current_section = '문제'
+            elif section == '입력':
+                current_section = '입력'
+            elif section == '출력':
+                current_section = '출력'
+            elif section == '예제 입력':
+                current_section = '예제 입력'
+            elif section == '예제 출력':
+                current_section = '예제 출력'
+            elif current_section and section:
+                if current_section == '문제' and not 문제:
+                    문제 = section
+                elif current_section == '입력' and not 입력:
+                    입력 = section
+                elif current_section == '출력' and not 출력:
+                    출력 = section
+                elif current_section == '예제 입력' and not 예제입력:
+                    예제입력.append(section)
+                elif current_section == '예제 출력' and not 예제출력:
+                    예제출력.append(section)
     
-    # 디버깅 정보 출력
-    print(f"✓ 추출된 내용:")
-    print(f"  문제: {문제[:50]}..." if len(문제) > 50 else f"  문제: {문제}")
-    print(f"  입력: {입력[:50]}..." if len(입력) > 50 else f"  입력: {입력}")
-    print(f"  출력: {출력}")
-    print(f"  예제입력: {예제입력}")
-    print(f"  예제출력: {예제출력}")
-    
-    return {
-        "문제": 문제,
-        "입력": 입력,
-        "출력": 출력,
-        "예제 입력": 예제입력,
-        "예제 출력": 예제출력
+    # 결과 정리
+    result = {
+        "문제": 문제.strip() if 문제 else "",
+        "입력": 입력.strip() if 입력 else "",
+        "출력": 출력.strip() if 출력 else "",
+        "예제 입력": 예제입력[0] if 예제입력 else "",
+        "예제 출력": 예제출력[0] if 예제출력 else ""
     }
+    
+    # 디버깅 정보
+    print("\n📋 최종 추출 결과:")
+    for key, value in result.items():
+        if value:
+            print(f"  {key}: {value[:50]}..." if len(value) > 50 else f"  {key}: {value}")
+        else:
+            print(f"  {key}: ❌ 없음")
+    
+    # 필수 항목 확인
+    if not result["문제"]:
+        print("\n⚠️ 문제 설명을 찾지 못했습니다. 페이지 구조 확인 필요")
+    if not result["예제 입력"] or not result["예제 출력"]:
+        print("\n⚠️ 예제를 찾지 못했습니다. 수동으로 입력해야 할 수 있습니다.")
+    
+    return result
 
 def create_markdown(platform, title, url, content):
+    """마크다운 파일 생성"""
     if platform == "programmers":
         # 프로그래머스: problems/programmers/문제명/문제명.md
         dir_name = slugify(title)
@@ -234,12 +280,21 @@ def create_markdown(platform, title, url, content):
     print(f"✅ Markdown 생성 완료: {md_path}")
 
 def main(java_file_path):
+    """메인 함수"""
+    print(f"🚀 처리 시작: {java_file_path}")
+    
+    # 메타데이터 추출
     title, platform, url = extract_metadata(java_file_path)
     if not all([title, platform, url]):
-        print("❌ 주석 정보가 부족합니다. // NOTE : 문제명, 플랫폼, URL 모두 필요합니다.")
+        print("❌ 주석 정보가 부족합니다.")
+        print("필요한 형식:")
+        print("// NOTE : 1541_잃어버린괄호")
+        print("// NOTE : 백준")
+        print("// NOTE : https://www.acmicpc.net/problem/1541")
         return
 
     platform_dir = "programmers" if "프로그래머스" in platform else "baekjoon"
+    print(f"📋 플랫폼: {platform_dir}, 제목: {title}")
 
     if platform_dir == "programmers":
         try:
@@ -296,7 +351,7 @@ if __name__ == "__main__":
         if missing_files:
             print(f"\n🎯 {len(missing_files)}개의 파일을 처리합니다:")
             for java_file in missing_files:
-                print(f"Processing: {java_file}")
+                print(f"\nProcessing: {java_file}")
                 main(java_file)
             print(f"\n✅ 총 {len(missing_files)}개 파일 처리 완료!")
         else:
