@@ -10,26 +10,43 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.10
+          python-version: '3.10'
 
       - name: Install dependencies
-        run: pip install beautifulsoup4 requests
+        run: |
+          pip install --upgrade pip
+          pip install beautifulsoup4 requests certifi
 
       - name: Run Markdown Generator
         run: |
-          find . -name "*.java" | while read file; do
-            python generate_md_from_java.py "$file"
+          # 변경된 Java 파일들만 처리
+          git diff --name-only HEAD~1 HEAD | grep '\.java$' | while read file; do
+            if [ -f "$file" ]; then
+              echo "Processing $file"
+              python main.py "$file"  # 스크립트 이름 확인 필요
+            fi
           done
 
       - name: Commit and Push Generated Markdown
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --global user.name 'auto-md-bot'
-          git config --global user.email 'bot@example.com'
-          git add problems/**/*.md
-          git commit -m "docs: Generate markdown from Java file" || echo "✅ No changes to commit"
-          git push || echo "✅ No changes to push"
+          git config --local user.name 'github-actions[bot]'
+          git config --local user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          # 변경사항이 있는지 확인
+          if [ -n "$(git status --porcelain)" ]; then
+            git add problems/**/*.md
+            git commit -m "docs: Generate markdown from Java files [skip ci]"
+            git push
+            echo "✅ Markdown files generated and committed"
+          else
+            echo "✅ No changes to commit"
+          fi
