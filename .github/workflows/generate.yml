@@ -1,0 +1,35 @@
+name: Generate Markdown from Java
+
+on:
+  push:
+    paths:
+      - '**/*.java'
+
+jobs:
+  generate-md:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.10
+
+      - name: Install dependencies
+        run: pip install beautifulsoup4 requests
+
+      - name: Run Markdown Generator
+        run: |
+          find . -name "*.java" | while read file; do
+            python generate_md_from_java.py "$file"
+          done
+
+      - name: Commit and Push Generated Markdown
+        run: |
+          git config --global user.name 'auto-md-bot'
+          git config --global user.email 'bot@example.com'
+          git add problems/**/*.md
+          git commit -m "docs: Generate markdown from Java file" || echo "✅ No changes to commit"
+          git push || echo "✅ No changes to push"
