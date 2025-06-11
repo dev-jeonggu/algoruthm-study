@@ -129,29 +129,32 @@ def fetch_baekjoon_content(url):
     
     # 출력 설명 추출
     for line in lines:
-        if ('출력한다' in line or '출력하시오' in line) and '경우의 수' in line:
+        if ('출력한다' in line or '출력하시오' in line) and ('경우의 수' in line or '출력' in line):
             출력 = line.strip()
-            break    
-        
-    # 예제 입력 찾기
-    sample_input_section = soup.select_one("#sample-input-1")
-    if sample_input_section:
-        예제입력 = sample_input_section.get_text(strip=True)
+            break
     
-    # 예제 출력 찾기
-    sample_output_section = soup.select_one("#sample-output-1")
-    if sample_output_section:
-        예제출력 = sample_output_section.get_text(strip=True)
-
-    # 대안으로 sampledata에서 찾기
-    if not 예제입력 or not 예제출력:
-        sample_data = soup.select(".sampledata")
-        for sample in sample_data:
-            if "예제 입력" in sample.get_text():
-                예제입력 = sample.find("pre").get_text(strip=True) if sample.find("pre") else ""
-            elif "예제 출력" in sample.get_text():
-                예제출력 = sample.find("pre").get_text(strip=True) if sample.find("pre") else ""
-
+    # 예제 입출력 추출 (숫자로만 구성된 라인들)
+    number_lines = []
+    number_pattern = re.compile(r'^\d+(\s+\d+)*$')
+    
+    for line in lines:
+        # 숫자와 공백만으로 구성된 라인 찾기
+        if number_pattern.match(line):
+            number_lines.append(line)
+    
+    # 첫 번째와 두 번째를 예제 입력과 출력으로 설정
+    if len(number_lines) >= 2:
+        예제입력 = number_lines[0]
+        예제출력 = number_lines[1]
+    
+    # 디버깅 정보 출력
+    print(f"✓ 추출된 내용:")
+    print(f"  문제: {문제[:50]}..." if len(문제) > 50 else f"  문제: {문제}")
+    print(f"  입력: {입력[:50]}..." if len(입력) > 50 else f"  입력: {입력}")
+    print(f"  출력: {출력}")
+    print(f"  예제입력: {예제입력}")
+    print(f"  예제출력: {예제출력}")
+    
     return {
         "문제": 문제,
         "입력": 입력,
@@ -257,13 +260,50 @@ def main(java_file_path):
             print(f"❌ 백준 콘텐츠 추출 실패: {e}")
             return
 
+    # 마크다운 생성
     create_markdown(platform_dir, title, url, content)
+
+def find_missing_markdown_files():
+    """마크다운이 없는 Java 파일들을 찾는 함수"""
+    missing_files = []
+    
+    if not os.path.exists("problems"):
+        print("❌ problems 폴더가 존재하지 않습니다.")
+        return missing_files
+    
+    # problems 폴더의 모든 Java 파일 찾기
+    for root, dirs, files in os.walk("problems"):
+        for file in files:
+            if file.endswith(".java"):
+                java_path = os.path.join(root, file)
+                
+                # 같은 디렉토리에 .md 파일이 있는지 확인
+                md_files = [f for f in files if f.endswith(".md")]
+                
+                if not md_files:
+                    missing_files.append(java_path)
+                    print(f"📝 마크다운 누락: {java_path}")
+                else:
+                    print(f"✅ 마크다운 존재: {java_path}")
+    
+    return missing_files
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("사용법: python script.py <java_file_path>")
-        sys.exit(1)
+        print("🔍 마크다운이 없는 Java 파일들을 찾는 중...")
+        missing_files = find_missing_markdown_files()
         
-    for arg in sys.argv[1:]:
-        if arg.endswith(".java"):
-            main(arg)
+        if missing_files:
+            print(f"\n🎯 {len(missing_files)}개의 파일을 처리합니다:")
+            for java_file in missing_files:
+                print(f"Processing: {java_file}")
+                main(java_file)
+            print(f"\n✅ 총 {len(missing_files)}개 파일 처리 완료!")
+        else:
+            print("✅ 모든 Java 파일에 마크다운이 존재합니다.")
+        
+    else:
+        # 특정 파일 처리
+        for arg in sys.argv[1:]:
+            if arg.endswith(".java"):
+                main(arg)

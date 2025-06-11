@@ -2,17 +2,23 @@ name: Generate Markdown from Java
 
 on:
   push:
+    branches: [ main, master ]
     paths:
       - '**/*.java'
+  workflow_dispatch:  # 수동 실행 가능
 
 jobs:
   generate-md:
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # 파일 수정 권한
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0  # 전체 히스토리 가져오기
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -24,30 +30,67 @@ jobs:
           pip install --upgrade pip
           pip install beautifulsoup4 requests certifi
 
-      - name: Run Markdown Generator
+      - name: Generate missing markdown files
         run: |
-          # 변경된 Java 파일들만 처리
-          git diff --name-only HEAD~1 HEAD | grep '\.java$' | while read file; do
-            if [ -f "$file" ]; then
-              echo "Processing $file"
-              python main.py "$file"  # 스크립트 이름 확인 필요
-            fi
-          done
+          echo "🚀 마크다운 생성 스크립트 실행..."
+          python main.py
+          echo "✅ 마크다운 생성 완료!"
 
-      - name: Commit and Push Generated Markdown
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+            
+            # 변경 사항 통계
+            new_files=$(git status --porcelain | grep "??" | grep "\.md$" | wc -l)
+            modified_files=$(git status --porcelain | grep "M " | grep "\.md$" | wc -l)
+            
+            echo "new_files=$new_files" >> $GITHUB_OUTPUT
+            echo "modified_files=$modified_files" >> $GITHUB_OUTPUT
+            
+            echo "📊 변경 사항:"
+            echo "  - 새 파일: $new_files"
+            echo "  - 수정 파일: $modified_files"
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+            echo "✅ 변경사항이 없습니다."
+          fi
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.changes == 'true'
         run: |
           git config --local user.name 'github-actions[bot]'
           git config --local user.email 'github-actions[bot]@users.noreply.github.com'
           
-          # 변경사항이 있는지 확인
-          if [ -n "$(git status --porcelain)" ]; then
-            git add problems/**/*.md
-            git commit -m "docs: Generate markdown from Java files [skip ci]"
-            git push
-            echo "✅ Markdown files generated and committed"
+          # 변경된 파일들 추가
+          git add problems/**/*.md
+          
+          # 커밋 메시지 생성
+          new_files=${{ steps.check_changes.outputs.new_files }}
+          modified_files=${{ steps.check_changes.outputs.modified_files }}
+          
+          if [ "$new_files" -gt 0 ] && [ "$modified_files" -gt 0 ]; then
+            commit_msg="docs: Generate $new_files new and update $modified_files markdown files [skip ci]"
+          elif [ "$new_files" -gt 0 ]; then
+            commit_msg="docs: Generate $new_files new markdown files [skip ci]"
+          elif [ "$modified_files" -gt 0 ]; then
+            commit_msg="docs: Update $modified_files markdown files [skip ci]"
           else
-            echo "✅ No changes to commit"
+            commit_msg="docs: Update markdown files [skip ci]"
           fi
           
+          git commit -m "$commit_msg"
+          git push
+          
+          echo "✅ 커밋 완료: $commit_msg"
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.check_changes.outputs.changes }}" == "true" ]; then
+            echo "🎉 마크다운 파일 생성/업데이트 완료!"
+            echo "  - 새 파일: ${{ steps.check_changes.outputs.new_files }}개"
+            echo "  - 수정 파일: ${{ steps.check_changes.outputs.modified_files }}개"
+          else
+            echo "✅ 모든 Java 파일에 마크다운이 이미 존재합니다."
+          fi
