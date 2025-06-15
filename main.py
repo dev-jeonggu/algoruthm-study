@@ -36,27 +36,85 @@ def extract_programmers_markdown(soup):
         "입출력 예": "",
         "입출력 예 설명": ""
     }
-    desc_box = soup.select_one(".markdown")
+    
+    # 여러 가능한 선택자 시도
+    desc_selectors = [
+        ".markdown",
+        ".lesson-content",
+        ".problem-description", 
+        "[class*='markdown']",
+        "[class*='content']"
+    ]
+    
+    desc_box = None
+    for selector in desc_selectors:
+        desc_box = soup.select_one(selector)
+        if desc_box:
+            print(f"✓ 설명 영역 찾음: {selector}")
+            break
+    
     if not desc_box:
+        # 대안: 전체 텍스트에서 패턴으로 찾기
+        print("⚠️ .markdown 영역을 찾을 수 없어 전체 텍스트 파싱 시도")
+        full_text = soup.get_text()
+        
+        # 텍스트에서 각 섹션 추출
+        sections = re.split(r'\n\s*(문제 설명|제한사항|입출력 예|입출력 예 설명)\s*\n', full_text)
+        
+        current_section = None
+        for i, section in enumerate(sections):
+            section_title = section.strip()
+            if section_title in content:
+                current_section = section_title
+            elif current_section and section.strip():
+                # 다음 섹션이 나오기 전까지의 내용을 수집
+                content_text = section.strip()
+                # 너무 긴 내용은 적당히 자르기
+                if len(content_text) > 2000:
+                    content_text = content_text[:2000] + "..."
+                content[current_section] = content_text
+                current_section = None
+        
         return content
 
     current = "문제 설명"
     buffer = []
 
-    for tag in desc_box.children:
-        if isinstance(tag, Tag):
-            if tag.name == 'h5':
+    # 모든 자식 요소 처리
+    for element in desc_box.descendants:
+        if hasattr(element, 'name'):
+            if element.name == 'h5':
+                # 이전 버퍼 내용 저장
                 if buffer:
                     content[current] = "\n".join(buffer).strip()
                     buffer = []
-                heading = tag.get_text(strip=True)
+                
+                heading = element.get_text(strip=True)
+                print(f"🔍 발견된 헤딩: '{heading}'")
+                
+                # 헤딩이 우리가 찾는 섹션 중 하나인지 확인
                 if heading in content:
                     current = heading
-            elif tag.name == 'ul':
-                for li in tag.find_all('li'):
+                elif "문제" in heading:
+                    current = "문제 설명"
+                elif "제한" in heading:
+                    current = "제한사항"
+                elif "입출력" in heading and "예" in heading and "설명" not in heading:
+                    current = "입출력 예"
+                elif "입출력" in heading and "설명" in heading:
+                    current = "입출력 예 설명"
+                    
+            elif element.name == 'p':
+                text = element.get_text(strip=True)
+                if text:
+                    buffer.append(text)
+                    
+            elif element.name == 'ul':
+                for li in element.find_all('li'):
                     buffer.append(f"- {li.get_text(strip=True)}")
-            elif tag.name == 'table':
-                rows = tag.find_all('tr')
+                    
+            elif element.name == 'table':
+                rows = element.find_all('tr')
                 table_lines = []
                 for i, row in enumerate(rows):
                     cols = [td.get_text(strip=True) for td in row.find_all(['td', 'th'])]
@@ -65,10 +123,9 @@ def extract_programmers_markdown(soup):
                     if i == 0:
                         table_lines.append(" | ".join(['---'] * len(cols)))
                 buffer.extend(table_lines)
-            elif tag.name == 'p':
-                buffer.append(tag.get_text(strip=True))
-            elif tag.name == 'br':
-                buffer.append("\n")
+                
+            elif element.name == 'br':
+                buffer.append("")
 
     if buffer:
         content[current] = "\n".join(buffer).strip()
@@ -142,7 +199,8 @@ def fetch_baekjoon_content(url):
             text = pre.get_text(strip=True)
             # copy 버튼이 있는 pre 태그는 예제일 가능성이 높음
             if pre.find_next_sibling('button') or pre.find_previous_sibling('button'):
-                if '복사' in str(pre.find_next_sibling()) or '복사' in str(pre.find_previous_sibling()):
+                copy_button_text = str(pre.find_next_sibling()) + str(pre.find_previous_sibling())
+                if '복사' in copy_button_text:
                     if i % 2 == 0:  # 짝수 인덱스는 입력
                         예제입력.append(text)
                     else:  # 홀수 인덱스는 출력
