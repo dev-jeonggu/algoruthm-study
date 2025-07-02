@@ -1,0 +1,47 @@
+// NOTE : 오픈채팅방
+// NOTE : 프로그래머스
+// NOTE : https://school.programmers.co.kr/learn/courses/30/lessons/42888
+
+import java.util.*;
+
+class Solution {
+    public String[] solution(String[] record) {
+        Map<String,List<Integer>> map = new HashMap<>(); // 이름의 위치
+        Map<String, String> mapName = new HashMap<>(); // 이름
+        List<String> list = new ArrayList<>(); //Enter, Leaver;
+        int index = 0;
+        for(String str: record){
+            String[] arr = str.split(" ");
+            if(arr[0].equals("Enter")){
+                List<Integer> tmp = new ArrayList<>();
+                if(map.containsKey(arr[1])){
+                    tmp = map.get(arr[1]);
+                }
+                tmp.add(index++);
+                map.put(arr[1], tmp);
+                mapName.put(arr[1], arr[2]);
+                list.add("Enter");
+            }else if(arr[0].equals("Change")){
+                mapName.put(arr[1], arr[2]);
+            }else{
+                List<Integer> tmp = map.get(arr[1]);
+                tmp.add(index++);
+                list.add("Leave");
+                map.put(arr[1], tmp);
+            }
+        }
+        
+        String[] answer = new String[list.size()];
+        for (String key : map.keySet()){
+            for(Integer n : map.get(key)){
+                String str = list.get(n);
+                if(str.equals("Enter")){
+                    answer[n] = mapName.get(key) + "님이 들어왔습니다.";
+                }else{
+                    answer[n] = mapName.get(key) + "님이 나갔습니다.";
+                }
+            }
+		}
+        return answer;
+    }
+}
