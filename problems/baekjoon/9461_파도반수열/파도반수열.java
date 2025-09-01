@@ -1,4 +1,4 @@
-// NOTE : 9461
+// NOTE : 9461_파도반수열
 // NOTE : 백준
 // NOTE : https://www.acmicpc.net/problem/9461
 

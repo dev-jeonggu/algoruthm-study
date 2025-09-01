@@ -1,4 +1,4 @@
-// NOTE : 12865
+// NOTE : 12865_평범한배낭
 // NOTE : 백준
 // NOTE : https://www.acmicpc.net/problem/12865
 
