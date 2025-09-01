@@ -1,4 +1,4 @@
-// NOTE : 1012
+// NOTE : 1012_유기농배추
 // NOTE : 백준
 // NOTE : https://www.acmicpc.net/problem/1012
 
