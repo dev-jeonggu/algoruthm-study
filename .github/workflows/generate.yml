@@ -19,7 +19,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # 전체 히스토리 가져오기
-
+      # [추가됨] Tor 설치 및 실행
+      - name: Install and Start Tor
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tor
+          sudo service tor start
+          # Tor가 완전히 켜질 때까지 잠시 대기
+          sleep 10
+          # IP 변경 확인 (디버깅용)
+          curl --socks5 localhost:9050 http://checkip.amazonaws.com
+          
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
