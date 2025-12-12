@@ -30,6 +30,30 @@ jobs:
           pip install --upgrade pip
           pip install beautifulsoup4 requests certifi
 
+        # (추가) 문제 HTML snapshot 다운로드
+      - name: Download problem HTML snapshots
+        run: |
+          echo "📥 문제 HTML 스냅샷 다운로드 중..."
+          mkdir -p snapshots
+          # 백준 URL 추출
+          grep -R "https://www.acmicpc.net/problem" -h **/*.java \
+            | sed -E 's/.*(https:\/\/www.acmicpc.net\/problem\/[0-9]+).*/\1/' \
+            | sort -u \
+            | while read url; do
+                echo "Fetching $url"
+                filename=$(echo "$url" | sed 's/[^a-zA-Z0-9]/_/g').html
+                curl -L \
+                  -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
+                  -H "Accept-Language: ko-KR,ko;q=0.9" \
+                  --retry 5 \
+                  --retry-delay 5 \
+                  --connect-timeout 15 \
+                  --max-time 30 \
+                  "$url" \
+                  -o "snapshots/$filename"
+              done
+          echo "✅ 스냅샷 다운로드 완료"
+          
       - name: Generate missing markdown files
         run: |
           echo "🚀 마크다운 생성 스크립트 실행..."
