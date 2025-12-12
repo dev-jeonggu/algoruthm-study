@@ -131,7 +131,17 @@ def extract_programmers_markdown(soup):
         content[current] = "\n".join(buffer).strip()
 
     return content
+    
+def load_snapshot(url):
+    safe = re.sub(r'[^a-zA-Z0-9]', '_', url)
+    path = f"snapshots/{safe}.html"
 
+    if not os.path.exists(path):
+        raise Exception(f"❌ Snapshot not found: {path}")
+
+    with open(path, encoding="utf-8") as f:
+        return BeautifulSoup(f, "html.parser")
+        
 def fetch_baekjoon_content(url):
     """백준 페이지에서 문제 내용 추출 - HTML 구조 기반 파싱"""
     try:
@@ -356,12 +366,8 @@ def main(java_file_path):
 
     if platform_dir == "programmers":
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-            response = requests.get(url, headers=headers, timeout=30)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = load_snapshot(url)
+            
             content = extract_programmers_markdown(soup)
         except Exception as e:
             print(f"❌ 프로그래머스 페이지 접근 실패: {e}")
