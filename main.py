@@ -136,11 +136,35 @@ def load_snapshot(url):
     safe = re.sub(r'[^a-zA-Z0-9]', '_', url)
     path = f"snapshots/{safe}.html"
 
-    if not os.path.exists(path):
-        raise Exception(f"❌ Snapshot not found: {path}")
+    # 1️⃣ snapshot이 이미 있으면 그대로 사용
+    if os.path.exists(path):
+        print(f"✓ Snapshot loaded: {path}")
+        with open(path, encoding="utf-8") as f:
+            return BeautifulSoup(f, "html.parser")
 
-    with open(path, encoding="utf-8") as f:
-        return BeautifulSoup(f, "html.parser")
+    # 2️⃣ GitHub Actions에서는 절대 requests 금지
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        raise Exception(f"❌ Snapshot not found in CI: {path}")
+
+    # 3️⃣ 로컬에서만 fallback 다운로드
+    print(f"📥 Local fallback download: {url}")
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/91.0.4472.124 Safari/537.36"
+        ),
+        "Accept-Language": "ko-KR,ko;q=0.9",
+    }
+
+    response = requests.get(url, headers=headers, timeout=30)
+    response.raise_for_status()
+
+    os.makedirs("snapshots", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(response.text)
+
+    return BeautifulSoup(response.text, "html.parser")
         
 def fetch_baekjoon_content(url):
     """백준 페이지에서 문제 내용 추출 - HTML 구조 기반 파싱"""
